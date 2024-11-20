@@ -3,3 +3,4 @@ __pycache__/
 *_default/
 ml-sample-100k-old_default/
 venvsasrec/
+sasrec_*.txt
