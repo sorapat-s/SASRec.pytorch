@@ -1,3 +1,13 @@
+This is a fork of [SASRec-pytorch](https://github.com/pmixer/SASRec.pytorch) for educational purpose. We studied how the model works with some small modification to run it with a downsampled MovieLens-1M dataset to ~100k interactions (mlm-sample-100k) at embedding size of 8, 16, 32, 64. We also compared the result with [NCF](https://github.com/hexiangnan/neural_collaborative_filtering) using the same sampledataset but transformed to work with the model (the dataset is in NCFdata/).
+
+Result compared with NCF
+![SASRec vs NCF](result/baseline.jpg)
+
+Results at different embedding size
+![Results at different embedding size](result/emb.jpg)
+
+Below is the original readme of SASRes-pytorch
+---
 modified based on [paper author's tensorflow implementation](https://github.com/kang205/SASRec), switching to PyTorch(v1.6) for simplicity, fixed issues like positional embedding usage etc. (making it harder to overfit, except for that, in recsys, personalization=overfitting sometimes)
 
 to train:
