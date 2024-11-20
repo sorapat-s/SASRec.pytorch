@@ -26,6 +26,7 @@ parser.add_argument('--l2_emb', default=0.0, type=float)
 parser.add_argument('--device', default='cuda', type=str)
 parser.add_argument('--inference_only', default=False, type=str2bool)
 parser.add_argument('--state_dict_path', default=None, type=str)
+parser.add_argument('--log_progress', default=False, type=bool)
 
 args = parser.parse_args()
 if not os.path.isdir(args.dataset + '_' + args.train_dir):
@@ -40,10 +41,15 @@ if __name__ == '__main__':
     
     # global dataset
     dataset = data_partition(args.dataset)
-
     [user_train, user_valid, user_test, usernum, itemnum] = dataset
-    # num_batch = len(user_train) // args.batch_size # tail? + ((len(user_train) % args.batch_size) != 0)
+
+    # print("train:\t", type(user_train), type(user_train[1]), user_train[1], sep="\n")
+    # print("valid:\t", type(user_valid), type(user_valid[1]), user_valid[1], sep="\n")
+    # print("test:\t", type(user_test), type(user_train[1]), user_test[1], sep="\n")
+    # input()
+
     num_batch = (len(user_train) - 1) // args.batch_size + 1
+
     cc = 0.0
     for u in user_train:
         cc += len(user_train[u])
@@ -51,6 +57,9 @@ if __name__ == '__main__':
     
     f = open(os.path.join(args.dataset + '_' + args.train_dir, 'log.txt'), 'w')
     f.write('epoch (val_ndcg, val_hr) (test_ndcg, test_hr)\n')
+    fp = None
+    if args.log_progress:
+        fp = open(f'sasrec_{args.hidden_units}.txt', 'w')
     
     sampler = WarpSampler(user_train, usernum, itemnum, batch_size=args.batch_size, maxlen=args.maxlen, n_workers=3)
     model = SASRec(usernum, itemnum, args).to(args.device) # no ReLU activation in original SASRec implementation?
@@ -59,15 +68,13 @@ if __name__ == '__main__':
         try:
             torch.nn.init.xavier_normal_(param.data)
         except:
-            pass # just ignore those failed init layers
+            pass # ignore failed init layers
 
     model.pos_emb.weight.data[0, :] = 0
     model.item_emb.weight.data[0, :] = 0
-
-    # this fails embedding init 'Embedding' object has no attribute 'dim'
-    # model.apply(torch.nn.init.xavier_uniform_)
     
-    model.train() # enable model training
+    # set model to training mode
+    model.train() 
     
     epoch_start_idx = 1
     if args.state_dict_path is not None:
@@ -87,9 +94,7 @@ if __name__ == '__main__':
         t_test = evaluate(model, dataset, args)
         print('test (NDCG@10: %.4f, HR@10: %.4f)' % (t_test[0], t_test[1]))
     
-    # ce_criterion = torch.nn.CrossEntropyLoss()
-    # https://github.com/NVIDIA/pix2pixHD/issues/9 how could an old bug appear again...
-    bce_criterion = torch.nn.BCEWithLogitsLoss() # torch.nn.BCELoss()
+    bce_criterion = torch.nn.BCEWithLogitsLoss() # Binary Cross Entropy
     adam_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.98))
 
     best_val_ndcg, best_val_hr = 0.0, 0.0
@@ -100,10 +105,19 @@ if __name__ == '__main__':
         if args.inference_only: break # just to decrease identition
         for step in range(num_batch): # tqdm(range(num_batch), total=num_batch, ncols=70, leave=False, unit='b'):
             u, seq, pos, neg = sampler.next_batch() # tuples to ndarray
+
+            # if epoch == epoch_start_idx and step == 0: print("u:\t", type(u), type(u[0]), len(u))
+            # if epoch == epoch_start_idx and step == 0: print("seq:\t", type(seq), type(seq[0]), len(seq), len(seq[0]), seq[0], sep='\n')
+            # if epoch == epoch_start_idx and step == 0: print("pos:\t", type(pos), type(pos[0]), len(pos), len(pos[0]), pos[0], sep='\n')
+            # if epoch == epoch_start_idx and step == 0: print("neg:\t", type(neg), type(neg[0]), len(neg), len(neg[0]), neg[0], sep='\n')
+            
             u, seq, pos, neg = np.array(u), np.array(seq), np.array(pos), np.array(neg)
             pos_logits, neg_logits = model(u, seq, pos, neg)
             pos_labels, neg_labels = torch.ones(pos_logits.shape, device=args.device), torch.zeros(neg_logits.shape, device=args.device)
-            # print("\neye ball check raw_logits:"); print(pos_logits); print(neg_logits) # check pos_logits > 0, neg_logits < 0
+            
+            # if epoch == epoch_start_idx and step == 0: print("pos logits:\t", type(pos_logits), pos_logits.shape, pos_logits[0], sep='\n')
+            # if epoch == epoch_start_idx and step == 0: print("neg logits:\t", type(neg_logits), neg_logits.shape, neg_logits[0], sep='\n')
+            
             adam_optimizer.zero_grad()
             indices = np.where(pos != 0)
             loss = bce_criterion(pos_logits[indices], pos_labels[indices])
@@ -111,9 +125,15 @@ if __name__ == '__main__':
             for param in model.item_emb.parameters(): loss += args.l2_emb * torch.norm(param)
             loss.backward()
             adam_optimizer.step()
-            print("loss in epoch {} iteration {}: {}".format(epoch, step, loss.item())) # expected 0.4~0.6 after init few epochs
+            # print("loss in epoch {} iteration {}: {}".format(epoch, step, loss.item())) # expected 0.4~0.6 after init few epochs
 
-        if epoch % 20 == 0:
+        if (epoch % 20 == 0 or epoch == epoch_start_idx) and args.log_progress:
+            model.eval()
+            t_test = evaluate(model, dataset, args)
+            fp.write(f"{epoch}\t%.4f\t%.4f\n" % (t_test[0], t_test[1]))
+            model.train()
+
+        if epoch % 50 == 0:
             model.eval()
             t1 = time.time() - t0
             T += t1
@@ -145,5 +165,9 @@ if __name__ == '__main__':
             torch.save(model.state_dict(), os.path.join(folder, fname))
     
     f.close()
+    if args.log_progress:
+        fp.close()
     sampler.close()
     print("Done")
+
+############################################################################################################################################

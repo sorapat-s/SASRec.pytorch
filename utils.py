@@ -22,7 +22,6 @@ def build_index(dataset_name):
 
     return u2i_index, i2u_index
 
-# sampler for batch generation
 def random_neq(l, r, s):
     t = np.random.randint(l, r)
     while t in s:
@@ -33,7 +32,6 @@ def random_neq(l, r, s):
 def sample_function(user_train, usernum, itemnum, batch_size, maxlen, result_queue, SEED):
     def sample(uid):
 
-        # uid = np.random.randint(1, usernum + 1)
         while len(user_train[uid]) <= 1: uid = np.random.randint(1, usernum + 1)
 
         seq = np.zeros([maxlen], dtype=np.int32)
@@ -124,7 +122,6 @@ def data_partition(fname):
             user_test[user].append(User[user][-1])
     return [user_train, user_valid, user_test, usernum, itemnum]
 
-# TODO: merge evaluate functions for test and val set
 # evaluate on test set
 def evaluate(model, dataset, args):
     [train, valid, test, usernum, itemnum] = copy.deepcopy(dataset)
@@ -151,10 +148,13 @@ def evaluate(model, dataset, args):
             if idx == -1: break
         rated = set(train[u])
         rated.add(0)
+        rated.add(valid[u][0])
+        rated.add(test[u][0])
         item_idx = [test[u][0]]
         for _ in range(100):
             t = np.random.randint(1, itemnum + 1)
-            while t in rated: t = np.random.randint(1, itemnum + 1)
+            # while t in rated: t = np.random.randint(1, itemnum + 1)
+            while t in rated or t in item_idx : t = np.random.randint(1, itemnum + 1)
             item_idx.append(t)
 
         predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_idx]])
@@ -167,12 +167,11 @@ def evaluate(model, dataset, args):
         if rank < 10:
             NDCG += 1 / np.log2(rank + 2)
             HT += 1
-        if valid_user % 100 == 0:
-            print('.', end="")
-            sys.stdout.flush()
+        # if valid_user % 100 == 0:
+        #     print('.', end="")
+        #     sys.stdout.flush()
 
     return NDCG / valid_user, HT / valid_user
-
 
 # evaluate on val set
 def evaluate_valid(model, dataset, args):
@@ -197,10 +196,12 @@ def evaluate_valid(model, dataset, args):
 
         rated = set(train[u])
         rated.add(0)
+        rated.add(valid[u][0])
         item_idx = [valid[u][0]]
         for _ in range(100):
             t = np.random.randint(1, itemnum + 1)
-            while t in rated: t = np.random.randint(1, itemnum + 1)
+            # while t in rated: t = np.random.randint(1, itemnum + 1)
+            while t in rated or t in item_idx : t = np.random.randint(1, itemnum + 1)
             item_idx.append(t)
 
         predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_idx]])
@@ -213,8 +214,10 @@ def evaluate_valid(model, dataset, args):
         if rank < 10:
             NDCG += 1 / np.log2(rank + 2)
             HT += 1
-        if valid_user % 100 == 0:
-            print('.', end="")
-            sys.stdout.flush()
+        # if valid_user % 100 == 0:
+        #     print('.', end="")
+        #     sys.stdout.flush()
 
     return NDCG / valid_user, HT / valid_user
+
+############################################################################################################################################
