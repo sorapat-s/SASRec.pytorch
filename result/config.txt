@@ -1,0 +1,14 @@
+sasrec_8:
+python main.py --dataset=ml-sample-100k --train_dir=default --maxlen=200 --hidden_units=8 --dropout_rate=0.2 --device=cpu --num_epochs=200 --batch_size=50 --log_progress=True
+
+sasrec_16:
+python main.py --dataset=ml-sample-100k --train_dir=default --maxlen=200 --hidden_units=16 --dropout_rate=0.2 --device=cpu --num_epochs=200 --batch_size=50 --log_progress=True
+
+sasrec_32:
+python main.py --dataset=ml-sample-100k --train_dir=default --maxlen=200 --hidden_units=35 --dropout_rate=0.2 --device=cpu --num_epochs=200 --batch_size=50 --log_progress=True
+
+sasrec_64:
+python main.py --dataset=ml-sample-100k --train_dir=default --maxlen=200 --hidden_units=64 --dropout_rate=0.2 --device=cpu --num_epochs=200 --batch_size=50 --log_progress=True
+
+ncf_32:
+docker run --volume=$(pwd):/home ncf-keras-theano python NeuMF.py --dataset ml-sample-100k --epochs 221 --batch_size 50 --num_factors 32 --layers [64,32] --reg_mf 0 --reg_layers [0,0] --num_neg 1 --lr 0.001 --learner adam --verbose 20 --out 1
